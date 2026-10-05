@@ -10,12 +10,12 @@ class MenuSeeder extends Seeder
     public function run(): void
     {
         $menus = [
-            ['name' => 'Orders', 'route' => 'orders', 'url' => 'dashboard/order'],
-            ['name' => 'Point Management', 'route' => 'points', 'url' => 'dashboard/point'],
-            ['name' => 'Redeem Points', 'route' => 'redeem-points', 'url' => 'dashboard/point-customer'],
-            ['name' => 'Gift Management', 'route' => 'gifts', 'url' => 'dashboard/gift'],
-            ['name' => 'Member Level', 'route' => 'member-levels', 'url' => 'dashboard/member_level'],
-            ['name' => 'Approval', 'route' => 'approvals', 'url' => 'dashboard/approval'],
+            ['name' => 'Orders', 'route' => 'orders', 'url' => 'admin/order'],
+            ['name' => 'Point Management', 'route' => 'points', 'url' => 'admin/point'],
+            ['name' => 'Redeem Points', 'route' => 'redeem-points', 'url' => 'admin/point-customer'],
+            ['name' => 'Gift Management', 'route' => 'gifts', 'url' => 'admin/gift'],
+            ['name' => 'Member Level', 'route' => 'member-levels', 'url' => 'admin/member_level'],
+            ['name' => 'Approval', 'route' => 'approvals', 'url' => 'admin/approval'],
         ];
 
         foreach ($menus as $menu) {
