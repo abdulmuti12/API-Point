@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -m)",
+      "Bash(php -r \"echo function_exists\\('imagick'\\) ? 'imagick ok' : 'no imagick'; echo PHP_EOL; echo function_exists\\('imagecreatefromwebp'\\) ? 'webp ok' : 'no webp'\")",
+      "Bash(php -r \"echo function_exists\\('gd_info'\\) ? 'gd yes' : 'no gd'; echo PHP_EOL; var_dump\\(function_exists\\('imagecreatefromstring'\\)\\);\")",
+      "Bash(cwebp -V)",
+      "Bash(php -r 'echo phpversion\\('\\\\''gd'\\\\''\\); echo PHP_EOL; $info = gd_info\\(\\); print_r\\($info\\);')",
+      "Bash(php -r \"echo extension_loaded\\('imagick'\\) ? 'imagick' : 'no imagick'; echo PHP_EOL;\")",
+      "Bash(cwebp -o /tmp/test.webp /Applications/XAMPP/xamppfiles/htdocs/API_BACKEND_LAP/storage/app/public/projects/placeholder.jpg)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(php -l /Applications/XAMPP/xamppfiles/htdocs/API_BACKEND_LAP/app/Http/Controllers/Admin/ProjectController.php)",
+      "Bash(npm view *)"
+    ]
+  }
+}

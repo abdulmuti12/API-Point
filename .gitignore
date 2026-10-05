@@ -1,0 +1,35 @@
+# Laravel Standard .gitignore
+
+/vendor
+/node_modules
+/public/storage
+/storage/*.key
+.env
+.env.*
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+.pnpm-debug.log
+/.idea
+/.vscode
+.DS_Store
+*.log
+*.sqlite
+/public/hot
+/public/mix-manifest.json
+/public/js/*.map
+/public/css/*.map
+
+# Laravel Sail (optional)
+docker-compose.override.yml
+
+# Laravel Telescope (optional)
+storage/telescope
+
+# Laravel Horizon (optional)
+storage/horizon
+
+# Laravel Vapor (optional)
+vapor.yml
