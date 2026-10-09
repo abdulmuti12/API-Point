@@ -14,6 +14,9 @@ use App\Models\Subdistrict;
 use App\Models\Category;
 use App\Models\Brand;
 use App\Http\Resources\Admin\OrderResource;
+use App\Models\RedeemHistory;
+use App\Models\RedeemPoint;
+use App\Models\Point;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
@@ -381,6 +384,32 @@ class OrderController extends BaseController
         $totalItems = (int) $order->items->sum('quantity');
         $firstItem = $order->items->first();
 
+        $pointRule = Point::whereRaw("LOWER(status) = 'active'")->first();
+        $customerId = $order->customer->id;
+
+        // Total seluruh order delivered/success customer ini
+        $totalCustomerTransaction = (int) Order::where('customer_id', $customerId)
+            ->whereIn('status', ['delivered', 'success'])
+            ->sum('grand_total');
+
+        // Point per customer (berbasis total akumulasi)
+        $customerPoints = $pointRule
+            ? intdiv($totalCustomerTransaction, (int) $pointRule->range_point) * (int) $pointRule->point
+            : 0;
+
+        // Point sebelum order ini (untuk mengetahui berapa point baru dari order ini)
+        $totalWithoutThisOrder = $totalCustomerTransaction - (in_array($order->status, ['delivered','success']) ? (int) $order->grand_total : 0);
+        $pointsBefore = $pointRule
+            ? intdiv($totalWithoutThisOrder, (int) $pointRule->range_point) * (int) $pointRule->point
+            : 0;
+        $pointsDelta = max(0, $customerPoints - $pointsBefore);
+
+        // Ambil point yang sudah dicatat di DB
+        $redeemPoint = RedeemPoint::where('customer_id', $customerId)
+            ->where('point_id', $pointRule ? $pointRule->id : null)
+            ->first();
+        $recordedPoints = $redeemPoint ? (int) $redeemPoint->total_point_earned : 0;
+
         return [
             'id'              => (int) $order->id,
             'order_number'    => $order->order_number,
@@ -405,11 +434,22 @@ class OrderController extends BaseController
             'total_items'     => $totalItems,
             'item_count'      => $order->items->count(),
 
-            // Preview item pertama (untuk thumbnail di list view)
+            // Preview item pertama
             'first_item'      => $firstItem ? [
                 'product_name' => $firstItem->product_name,
                 'variant_name' => $firstItem->variant_name,
                 'image'        => $firstItem->image,
+            ] : null,
+
+            // Points info
+            'customer_total_transaction' => $totalCustomerTransaction,
+            'customer_points'            => $customerPoints,
+            'order_points_delta'         => $pointsDelta,
+            'recorded_points'            => $recordedPoints,
+            'point_rule'                 => $pointRule ? [
+                'name'        => $pointRule->name,
+                'range_point' => (int) $pointRule->range_point,
+                'point'       => (int) $pointRule->point,
             ] : null,
         ];
     }
@@ -494,6 +534,48 @@ class OrderController extends BaseController
                 'status'            => $order->transaction->status,
                 'note'              => $order->transaction->note,
             ] : null,
+
+            // Points info (berbasis total akumulasi seluruh transaksi customer)
+            'customer_total_transaction' => (function () use ($order) {
+                return (int) Order::where('customer_id', $order->customer_id)
+                    ->whereIn('status', ['delivered', 'success'])
+                    ->sum('grand_total');
+            })(),
+            'customer_points'            => (function () use ($order) {
+                $rule = Point::whereRaw("LOWER(status) = 'active'")->first();
+                if (!$rule) return 0;
+                $total = (int) Order::where('customer_id', $order->customer_id)
+                    ->whereIn('status', ['delivered', 'success'])
+                    ->sum('grand_total');
+                return intdiv($total, (int) $rule->range_point) * (int) $rule->point;
+            })(),
+            'order_points_delta'         => (function () use ($order) {
+                $rule = Point::whereRaw("LOWER(status) = 'active'")->first();
+                if (!$rule || !in_array($order->status, ['delivered', 'success'])) return 0;
+                $totalAll = (int) Order::where('customer_id', $order->customer_id)
+                    ->whereIn('status', ['delivered', 'success'])
+                    ->sum('grand_total');
+                $withoutThis = $totalAll - (int) $order->grand_total;
+                $before = intdiv($withoutThis, (int) $rule->range_point) * (int) $rule->point;
+                $after  = intdiv($totalAll,   (int) $rule->range_point) * (int) $rule->point;
+                return max(0, $after - $before);
+            })(),
+            'recorded_points'            => (function () use ($order) {
+                $rule = Point::whereRaw("LOWER(status) = 'active'")->first();
+                if (!$rule) return 0;
+                $rp = RedeemPoint::where('customer_id', $order->customer_id)
+                    ->where('point_id', $rule->id)
+                    ->first();
+                return $rp ? (int) $rp->total_point_earned : 0;
+            })(),
+            'point_rule'                 => (function () {
+                $rule = Point::whereRaw("LOWER(status) = 'active'")->first();
+                return $rule ? [
+                    'name'        => $rule->name,
+                    'range_point' => (int) $rule->range_point,
+                    'point'       => (int) $rule->point,
+                ] : null;
+            })(),
         ];
     }
 }
