@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Mappers\Customer\CustomerFEDetailMapper;
 use App\Models\Address;
+use App\Models\AddressText;
 use App\Models\Customer;
 use App\Models\Kodepos;
 use App\Models\MasterCity;
@@ -172,6 +173,132 @@ class CustomerDataController extends BaseController
         }
 
         $address->delete();
+
+        return $this->sendResponse(null, 'Address deleted');
+    }
+
+    public function getAddressTexts()
+    {
+        $customer = Auth::guard('customer')->user();
+
+        $addressTexts = AddressText::where('customer_id', $customer->id)
+            ->orderBy('status', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'address', 'note', 'status']);
+
+        return $this->sendResponse($addressTexts, 'Success Load Address Texts');
+    }
+
+    public function createAddressText(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'address' => 'required|string',
+            'note'    => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error', $validator->errors());
+        }
+
+        $customer = Auth::guard('customer')->user();
+
+        $hasActive = AddressText::where('customer_id', $customer->id)
+            ->where('status', 'active')
+            ->exists();
+
+        $addressText = AddressText::create([
+            'customer_id' => $customer->id,
+            'address'     => strip_tags($request->address),
+            'note'        => $request->note ? strip_tags($request->note) : null,
+            'status'      => $hasActive ? 'inactive' : 'active',
+        ]);
+
+        return $this->sendResponse($addressText, 'Address text created successfully');
+    }
+
+    public function toggleAddressTextStatus(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id' => 'required|exists:address_text,id',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error', $validator->errors());
+        }
+
+        $customer = Auth::guard('customer')->user();
+
+        $addressText = AddressText::where('id', $request->id)
+            ->where('customer_id', $customer->id)
+            ->first();
+
+        if (!$addressText) {
+            return $this->sendError('Not Found', 'Address not found or access denied');
+        }
+
+        if ($addressText->status === 'active') {
+            $addressText->update(['status' => 'inactive']);
+        } else {
+            AddressText::where('customer_id', $customer->id)
+                ->where('status', 'active')
+                ->update(['status' => 'inactive']);
+            $addressText->update(['status' => 'active']);
+        }
+
+        return $this->sendResponse($addressText, 'Address status updated');
+    }
+
+    public function updateAddressText(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id'      => 'required|exists:address_text,id',
+            'address' => 'required|string',
+            'note'    => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error', $validator->errors());
+        }
+
+        $customer = Auth::guard('customer')->user();
+
+        $addressText = AddressText::where('id', $request->id)
+            ->where('customer_id', $customer->id)
+            ->first();
+
+        if (!$addressText) {
+            return $this->sendError('Not Found', 'Address not found or access denied');
+        }
+
+        $addressText->update([
+            'address' => strip_tags($request->address),
+            'note'    => $request->note !== null && $request->note !== '' ? strip_tags($request->note) : null,
+        ]);
+
+        return $this->sendResponse($addressText, 'Address updated successfully');
+    }
+
+    public function deleteAddressText(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id' => 'required|exists:address_text,id',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error', $validator->errors());
+        }
+
+        $customer = Auth::guard('customer')->user();
+
+        $addressText = AddressText::where('id', $request->id)
+            ->where('customer_id', $customer->id)
+            ->first();
+
+        if (!$addressText) {
+            return $this->sendError('Not Found', 'Address not found or access denied');
+        }
+
+        $addressText->delete();
 
         return $this->sendResponse(null, 'Address deleted');
     }

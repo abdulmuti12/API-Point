@@ -195,4 +195,11 @@ Route::prefix('customers')->group(function () {
     Route::post('create-address', [CustomerDataController::class, 'createAddress'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
     Route::get('get-addresses', [CustomerDataController::class, 'getAddresses']);
     Route::post('delete-address', [CustomerDataController::class, 'deleteAddress'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+    Route::middleware(['jwt.customer'])->group(function () {
+        Route::get('get-address-texts', [CustomerDataController::class, 'getAddressTexts']);
+        Route::post('create-address-text', [CustomerDataController::class, 'createAddressText'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('toggle-address-text-status', [CustomerDataController::class, 'toggleAddressTextStatus'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('update-address-text', [CustomerDataController::class, 'updateAddressText'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('delete-address-text', [CustomerDataController::class, 'deleteAddressText'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+    });
 });
