@@ -19,6 +19,11 @@ class AddressText extends Model
         'customer_id',
         'address',
         'note',
+        'status',
+    ];
+
+    protected $attributes = [
+        'status' => 'active',
     ];
 
     public function customer()
