@@ -4,22 +4,16 @@ namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Mappers\Customer\CustomerFEDetailMapper;
-use App\Models\Address;
-use App\Models\AddressText;
 use App\Models\Customer;
-use App\Models\Kodepos;
 use App\Models\MasterCity;
 use App\Models\MasterDistrict;
 use App\Models\MasterPostalCode;
 use App\Models\MasterProvince;
 use App\Models\MasterSubdistrict;
-use App\Models\RegDistrict;
-use App\Models\RegProvince;
-use App\Models\RegRegencie;
-use App\Models\RegVillage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Services\Customer\CustomerDataService;
 
 
 class CustomerDataController extends BaseController
@@ -59,246 +53,148 @@ class CustomerDataController extends BaseController
 
     public function getProvince()
     {
-        $provinces=MasterProvince::all();
+        $provinces = MasterProvince::all();
 
         return $this->sendResponse($provinces, 'Success Load Data');
     }
+
     public function getCity(Request $request)
     {
-        $provinces=MasterCity::where('prov_id', request()->get('prov_id'))->get();
+        $provinces = MasterCity::where('prov_id', request()->get('prov_id'))->get();
 
         return $this->sendResponse($provinces, 'Success Load Data');
     }
+
     public function getDistricts(Request $request)
     {
-        // dd(request()->get('city_id'));
-        $districts=MasterDistrict::where('city_id', request()->get('city_id'))->get();
+        $districts = MasterDistrict::where('city_id', request()->get('city_id'))->get();
 
         return $this->sendResponse($districts, 'Success Load Data');
     }
+
     public function getSubDistrict(Request $request)
     {
-        $villages=MasterSubdistrict::where('dis_id', request()->get('dis_id'))->get();
+        $villages = MasterSubdistrict::where('dis_id', request()->get('dis_id'))->get();
 
         return $this->sendResponse($villages, 'Success Load Data');
     }
-    
+
     public function getPostalCode(Request $request)
     {
-        $postalcode=MasterPostalCode::where('prov_id', request()->get('prov_id'))
-                                      ->where('city_id', request()->get('city_id'))
-                                      ->where('dis_id', request()->get('dis_id'))
-                                      ->where('subdis_id', request()->get('subdis_id'))->first();
+        $postalcode = MasterPostalCode::where('prov_id', request()->get('prov_id'))
+            ->where('city_id', request()->get('city_id'))
+            ->where('dis_id', request()->get('dis_id'))
+            ->where('subdis_id', request()->get('subdis_id'))->first();
 
         return $this->sendResponse($postalcode, 'Success Load Data');
     }
-    public function createAddress(Request $request)
+
+    public function createAddress(Request $request, CustomerDataService $service)
     {
-        $validator = Validator::make($request->all(), [
-            'recipient_name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
-            'address_line' => 'required|string',
-            'province_id' => 'required|exists:master_province,prov_id',
-            'province_name' => 'required|string|max:255',
-            'city_id' => 'required|exists:master_city,city_id',
-            'city_name' => 'required|string|max:255',
-            'district_id' => 'required|exists:master_district,dis_id',
-            'district_name' => 'required|string|max:255',
-            'subdistrict_id' => 'required|exists:master_subdistrict,subdis_id',
-            'subdistrict_name' => 'required|string|max:255',
-            'postal_code' => 'required|string|max:10',
-            'is_default' => 'sometimes|boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->sendError('Validation Error', $validator->errors());
-        }
-
         $customer = Auth::guard('customer')->user();
-
-        if ($request->is_default) {
-            Address::where('user_id', $customer->id)->update(['is_default' => false]);
+        if (!$customer) {
+            return $this->sendError('Unauthorized', 'Silakan login terlebih dahulu');
         }
 
-        $address = Address::create([
-            'user_id' => $customer->id,
-            'recipient_name' => strip_tags($request->recipient_name),
-            'phone' => preg_replace('/[^0-9+\-\s]/', '', $request->phone),
-            'province_id' => $request->province_id,
-            'province_name' => strip_tags($request->province_name),
-            'city_id' => $request->city_id,
-            'city_name' => strip_tags($request->city_name),
-            'district_id' => $request->district_id,
-            'district_name' => strip_tags($request->district_name),
-            'subdistrict_id' => $request->subdistrict_id,
-            'subdistrict_name' => strip_tags($request->subdistrict_name),
-            'postal_code' => preg_replace('/[^0-9]/', '', $request->postal_code),
-            'address_line' => strip_tags($request->address_line),
-            'is_default' => $request->is_default ?? false,
-        ]);
+        $result = $service->createAddress($customer, $request->all());
+        if (isset($result['error'])) {
+            return $this->sendError($result['error'], $result['errors'] ?? $result['message']);
+        }
 
-        return $this->sendResponse($address, 'Address created successfully');
+        return $this->sendResponse($result['address'], 'Address created successfully');
     }
 
-    public function getAddresses()
+    public function getAddresses(CustomerDataService $service)
     {
         $customer = Auth::guard('customer')->user();
+        if (!$customer) {
+            return $this->sendError('Unauthorized', 'Silakan login terlebih dahulu');
+        }
 
-        $addresses = Address::where('user_id', $customer->id)
-            ->orderBy('is_default', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return $this->sendResponse($addresses, 'Success Load Addresses');
+        return $this->sendResponse($service->getAddresses($customer), 'Success Load Addresses');
     }
 
-    public function deleteAddress(Request $request)
+    public function deleteAddress(Request $request, CustomerDataService $service)
     {
-        $validator = Validator::make($request->all(), [
-            'id' => 'required|exists:addresses,id',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->sendError('Validation Error', $validator->errors());
-        }
-
         $customer = Auth::guard('customer')->user();
-
-        $address = Address::where('id', $request->id)
-            ->where('user_id', $customer->id)
-            ->first();
-
-        if (!$address) {
-            return $this->sendError('Not Found', 'Address not found or access denied');
+        if (!$customer) {
+            return $this->sendError('Unauthorized', 'Silakan login terlebih dahulu');
         }
 
-        $address->delete();
+        $result = $service->deleteAddress($customer, $request->all());
+        if (isset($result['error'])) {
+            return $this->sendError($result['error'], $result['errors'] ?? $result['message']);
+        }
 
         return $this->sendResponse(null, 'Address deleted');
     }
 
-    public function getAddressTexts()
+    public function getAddressTexts(CustomerDataService $service)
     {
         $customer = Auth::guard('customer')->user();
+        if (!$customer) {
+            return $this->sendError('Unauthorized', 'Silakan login terlebih dahulu');
+        }
 
-        $addressTexts = AddressText::where('customer_id', $customer->id)
-            ->orderBy('status', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->get(['id', 'address', 'note', 'status']);
-
-        return $this->sendResponse($addressTexts, 'Success Load Address Texts');
+        return $this->sendResponse($service->getAddressTexts($customer), 'Success Load Address Texts');
     }
 
-    public function createAddressText(Request $request)
+    public function createAddressText(Request $request, CustomerDataService $service)
     {
-        $validator = Validator::make($request->all(), [
-            'address' => 'required|string',
-            'note'    => 'nullable|string|max:255',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->sendError('Validation Error', $validator->errors());
+        $customer = Auth::guard('customer')->user();
+        if (!$customer) {
+            return $this->sendError('Unauthorized', 'Silakan login terlebih dahulu');
         }
 
-        $customer = Auth::guard('customer')->user();
+        $result = $service->createAddressText($customer, $request->all());
+        if (isset($result['error'])) {
+            return $this->sendError($result['error'], $result['errors']);
+        }
 
-        $hasActive = AddressText::where('customer_id', $customer->id)
-            ->where('status', 'active')
-            ->exists();
-
-        $addressText = AddressText::create([
-            'customer_id' => $customer->id,
-            'address'     => strip_tags($request->address),
-            'note'        => $request->note ? strip_tags($request->note) : null,
-            'status'      => $hasActive ? 'inactive' : 'active',
-        ]);
-
-        return $this->sendResponse($addressText, 'Address text created successfully');
+        return $this->sendResponse($result['addressText'], 'Address text created successfully');
     }
 
-    public function toggleAddressTextStatus(Request $request)
+    public function toggleAddressTextStatus(Request $request, CustomerDataService $service)
     {
-        $validator = Validator::make($request->all(), [
-            'id' => 'required|exists:address_text,id',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->sendError('Validation Error', $validator->errors());
-        }
-
         $customer = Auth::guard('customer')->user();
-
-        $addressText = AddressText::where('id', $request->id)
-            ->where('customer_id', $customer->id)
-            ->first();
-
-        if (!$addressText) {
-            return $this->sendError('Not Found', 'Address not found or access denied');
+        if (!$customer) {
+            return $this->sendError('Unauthorized', 'Silakan login terlebih dahulu');
         }
 
-        if ($addressText->status === 'active') {
-            $addressText->update(['status' => 'inactive']);
-        } else {
-            AddressText::where('customer_id', $customer->id)
-                ->where('status', 'active')
-                ->update(['status' => 'inactive']);
-            $addressText->update(['status' => 'active']);
+        $result = $service->toggleAddressTextStatus($customer, $request->all());
+        if (isset($result['error'])) {
+            return $this->sendError($result['error'], $result['errors'] ?? $result['message']);
         }
 
-        return $this->sendResponse($addressText, 'Address status updated');
+        return $this->sendResponse($result['addressText'], 'Address status updated');
     }
 
-    public function updateAddressText(Request $request)
+    public function updateAddressText(Request $request, CustomerDataService $service)
     {
-        $validator = Validator::make($request->all(), [
-            'id'      => 'required|exists:address_text,id',
-            'address' => 'required|string',
-            'note'    => 'nullable|string|max:255',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->sendError('Validation Error', $validator->errors());
-        }
-
         $customer = Auth::guard('customer')->user();
-
-        $addressText = AddressText::where('id', $request->id)
-            ->where('customer_id', $customer->id)
-            ->first();
-
-        if (!$addressText) {
-            return $this->sendError('Not Found', 'Address not found or access denied');
+        if (!$customer) {
+            return $this->sendError('Unauthorized', 'Silakan login terlebih dahulu');
         }
 
-        $addressText->update([
-            'address' => strip_tags($request->address),
-            'note'    => $request->note !== null && $request->note !== '' ? strip_tags($request->note) : null,
-        ]);
+        $result = $service->updateAddressText($customer, $request->all());
+        if (isset($result['error'])) {
+            return $this->sendError($result['error'], $result['errors'] ?? $result['message']);
+        }
 
-        return $this->sendResponse($addressText, 'Address updated successfully');
+        return $this->sendResponse($result['addressText'], 'Address updated successfully');
     }
 
-    public function deleteAddressText(Request $request)
+    public function deleteAddressText(Request $request, CustomerDataService $service)
     {
-        $validator = Validator::make($request->all(), [
-            'id' => 'required|exists:address_text,id',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->sendError('Validation Error', $validator->errors());
-        }
-
         $customer = Auth::guard('customer')->user();
-
-        $addressText = AddressText::where('id', $request->id)
-            ->where('customer_id', $customer->id)
-            ->first();
-
-        if (!$addressText) {
-            return $this->sendError('Not Found', 'Address not found or access denied');
+        if (!$customer) {
+            return $this->sendError('Unauthorized', 'Silakan login terlebih dahulu');
         }
 
-        $addressText->delete();
+        $result = $service->deleteAddressText($customer, $request->all());
+        if (isset($result['error'])) {
+            return $this->sendError($result['error'], $result['errors'] ?? $result['message']);
+        }
 
         return $this->sendResponse(null, 'Address deleted');
     }
