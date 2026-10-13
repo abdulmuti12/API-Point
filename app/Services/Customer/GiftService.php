@@ -6,7 +6,9 @@ use App\Models\Customer;
 use App\Models\Gift;
 use App\Models\GiftClaim;
 use App\Models\RedeemPoint;
+use App\Services\AuditService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class GiftService
@@ -120,21 +122,44 @@ class GiftService
 
         DB::beginTransaction();
         try {
+            // Lock redeem point row to prevent concurrent point manipulation
             $redeemPoint = RedeemPoint::where('customer_id', $customer->id)
                 ->orderBy('id', 'desc')
+                ->lockForUpdate()
                 ->first();
+
+            // Double-check point after lock
+            $lockedPoints = $redeemPoint ? (int) $redeemPoint->total_point_active : 0;
+            if ($lockedPoints < $gift->total_point) {
+                DB::rollBack();
+                return [
+                    'error'   => 'Point tidak cukup',
+                    'message' => "Anda membutuhkan {$gift->total_point} poin, saat ini hanya punya {$lockedPoints}",
+                ];
+            }
 
             $claim = GiftClaim::create([
                 'customer_id'               => $customer->id,
                 'gift_id'                   => $gift->id,
                 'redeem_point_id'           => $redeemPoint ? $redeemPoint->id : null,
                 'required_point'            => $gift->total_point,
-                'customer_point_at_request' => $totalPoints,
+                'customer_point_at_request' => $lockedPoints,
                 'status'                    => 'waiting',
                 'notes'                     => $request['notes'] ?? null,
             ]);
 
             DB::commit();
+
+            // Audit: claim request dibuat
+            app(AuditService::class)->log(
+                action:      'gift.claim_requested',
+                userId:      (string) $customer->id,
+                userType:    'customer',
+                userName:    $customer->name,
+                entityType:  'gift_claim',
+                entityId:    (string) $claim->id,
+                description: "Customer {$customer->name} memohon claim gift \"{$gift->name}\" ({$gift->total_point} poin)"
+            );
 
             return [
                 'data' => [
@@ -149,7 +174,11 @@ class GiftService
             ];
         } catch (\Throwable $e) {
             DB::rollBack();
-            return ['error' => 'Server Error', 'message' => $e->getMessage()];
+            Log::error('Gift claim failed for customer: ' . $customer->id, [
+                'gift_id' => $request['gift_id'] ?? null,
+                'exception' => $e,
+            ]);
+            return ['error' => 'Server Error', 'message' => 'Terjadi kesalahan pada server'];
         }
     }
 

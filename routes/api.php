@@ -37,10 +37,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/check-route', fn() => 'ok');
 
 Route::prefix('admins')->group(function () {
-    Route::post('/login', [AuthController::class, 'login'])->middleware([\App\Http\Middleware\ProgressiveRateLimit::class . ':5,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('logincheck');
+    Route::post('/login', [AuthController::class, 'login'])->middleware(['throttle:5,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('logincheck');
     Route::get('/check-route', fn() => 'ok')->name('login');
-    Route::post('/forgot_password', [AuthController::class, 'sendResetLinkEmail'])->middleware([\App\Http\Middleware\ProgressiveRateLimit::class . ':3,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
-    Route::post('/reset_password', [AuthController::class, 'reset'])->middleware([\App\Http\Middleware\ProgressiveRateLimit::class . ':3,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+    Route::post('/forgot_password', [AuthController::class, 'sendResetLinkEmail'])->middleware(['throttle:3,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+    Route::post('/reset_password', [AuthController::class, 'reset'])->middleware(['throttle:3,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
 
     Route::get('active-logo', [LogoController::class, 'activeLogo'])->name('logo.active');
 
@@ -86,7 +86,7 @@ Route::prefix('admins')->group(function () {
         });
 
         Route::middleware([CanAccessMenu::class . ':Orders'])->group(function () {
-            Route::apiResource('order', OrderController::class);
+            Route::apiResource('order', OrderController::class)->middleware(['throttle:30,60']);
             Route::get('get-categories', [OrderController::class, 'getCategories']);
             Route::get('get-brands', [OrderController::class, 'getBrands']);
         });
@@ -130,7 +130,7 @@ Route::prefix('admins')->group(function () {
         Route::prefix('redeem-point')->group(function () {
             Route::get('/', [RedeemPointController::class, 'index'])->name('redeem-point.index');
             Route::post('/calculate/{customerId}', [RedeemPointController::class, 'calculate'])->name('redeem-point.calculate');
-            Route::post('/claim', [RedeemPointController::class, 'claim'])->name('redeem-point.claim');
+            Route::post('/claim', [RedeemPointController::class, 'claim'])->middleware(['throttle:20,60'])->name('redeem-point.claim');
             Route::get('/history/{customerId}', [RedeemPointController::class, 'history'])->name('redeem-point.history');
             Route::get('/{customerId}', [RedeemPointController::class, 'show'])->name('redeem-point.show');
         });
@@ -157,14 +157,14 @@ Route::get('home-banner', [HomeController::class, 'getHomeBanner'])->name(name: 
 Route::get('customer-promotion', [PromotionCustomersController::class, 'index'])->name(name: 'customer-promotion');
 
 
-Route::post('email-subscriber', [EmailSubscriberController::class,'store'])->middleware(\App\Http\Middleware\CheckCsrfOrigin::class);
+Route::post('email-subscriber', [EmailSubscriberController::class,'store'])->middleware(['throttle:5,60', \App\Http\Middleware\CheckCsrfOrigin::class]);
 Route::prefix('customers')->group(function () {
-    Route::post('/register', [AuthCustomerController::class, 'register'])->middleware(['throttle:10,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('register-customer');
-    Route::post('/social-register-auth', [AuthCustomerController::class, 'socialRegister'])->middleware(['throttle:10,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('social-register-auth');
-    Route::post('/social-login', [AuthCustomerController::class, 'socialLogin'])->middleware(['throttle:10,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('social-login-customer');
-    Route::post('/login-customer', [AuthCustomerController::class, 'login'])->middleware(['throttle:8,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('login-customer');
-    Route::post('/set-password', [AuthCustomerController::class, 'setPassword'])->middleware(['throttle:8,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('set-password');
-    Route::post('/resend-verification', [AuthCustomerController::class, 'resendVerification'])->middleware(['throttle:5,1', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('resend-verification');
+    Route::post('/register', [AuthCustomerController::class, 'register'])->middleware(['throttle:10,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('register-customer');
+    Route::post('/social-register-auth', [AuthCustomerController::class, 'socialRegister'])->middleware(['throttle:10,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('social-register-auth');
+    Route::post('/social-login', [AuthCustomerController::class, 'socialLogin'])->middleware(['throttle:10,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('social-login-customer');
+    Route::post('/login-customer', [AuthCustomerController::class, 'login'])->middleware(['throttle:8,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('login-customer');
+    Route::post('/set-password', [AuthCustomerController::class, 'setPassword'])->middleware(['throttle:8,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('set-password');
+    Route::post('/resend-verification', [AuthCustomerController::class, 'resendVerification'])->middleware(['throttle:5,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('resend-verification');
     Route::post('/verify-email', [AuthCustomerController::class, 'verifyEmail'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class])->name('verify-email');
     Route::get('/me', [AuthCustomerController::class, 'me']);
     Route::post('/logout', [AuthCustomerController::class, 'logout'])->middleware(\App\Http\Middleware\CheckCsrfOrigin::class);
@@ -182,7 +182,7 @@ Route::prefix('customers')->group(function () {
         Route::get('get-orders/{id}', [CustomerOrderController::class, 'getOrderDetail']);
         Route::get('member-level', [CustomerMemberLevelController::class, 'show']);
         Route::get('gifts', [GiftCustomerController::class, 'index']);
-        Route::post('gifts/claim', [GiftCustomerController::class, 'claim']);
+        Route::post('gifts/claim', [GiftCustomerController::class, 'claim'])->middleware(['throttle:10,60']);
         Route::get('gifts/claims', [GiftCustomerController::class, 'claims']);
         Route::apiResource('orders', CustomerOrderController::class)->except([
             'store', 'update', 'destroy'
@@ -196,12 +196,12 @@ Route::prefix('customers')->group(function () {
     Route::post('get-postal-code', [CustomerDataController::class, 'getPostalCode'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
     Route::middleware(['jwt.customer'])->group(function () {
         Route::get('get-addresses', [CustomerDataController::class, 'getAddresses']);
-        Route::post('create-address', [CustomerDataController::class, 'createAddress'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
-        Route::post('delete-address', [CustomerDataController::class, 'deleteAddress'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('create-address', [CustomerDataController::class, 'createAddress'])->middleware(['throttle:30,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('delete-address', [CustomerDataController::class, 'deleteAddress'])->middleware(['throttle:20,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
         Route::get('get-address-texts', [CustomerDataController::class, 'getAddressTexts']);
-        Route::post('create-address-text', [CustomerDataController::class, 'createAddressText'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
-        Route::post('toggle-address-text-status', [CustomerDataController::class, 'toggleAddressTextStatus'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
-        Route::post('update-address-text', [CustomerDataController::class, 'updateAddressText'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
-        Route::post('delete-address-text', [CustomerDataController::class, 'deleteAddressText'])->middleware([\App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('create-address-text', [CustomerDataController::class, 'createAddressText'])->middleware(['throttle:30,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('toggle-address-text-status', [CustomerDataController::class, 'toggleAddressTextStatus'])->middleware(['throttle:30,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('update-address-text', [CustomerDataController::class, 'updateAddressText'])->middleware(['throttle:30,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
+        Route::post('delete-address-text', [CustomerDataController::class, 'deleteAddressText'])->middleware(['throttle:20,60', \App\Http\Middleware\CheckCsrfOrigin::class, \App\Http\Middleware\SanitizeXssInput::class]);
     });
 });

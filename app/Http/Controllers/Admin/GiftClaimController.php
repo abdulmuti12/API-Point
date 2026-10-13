@@ -12,6 +12,7 @@ use App\Models\Gift;
 use App\Models\RedeemPoint;
 use App\Models\RedeemHistory;
 use App\Http\Resources\Admin\GiftClaimResource;
+use App\Services\AuditService;
 
 class GiftClaimController extends BaseController
 {
@@ -120,28 +121,31 @@ class GiftClaimController extends BaseController
             );
         }
 
-        // Cari redeem point customer (yang paling baru / paling aktif)
-        $redeemPoint = RedeemPoint::where('customer_id', $claim->customer_id)
-            ->orderBy('id', 'desc')
-            ->first();
-
-        if (!$redeemPoint) {
-            return $this->sendError(
-                'Point customer tidak ditemukan',
-                'Customer belum memiliki redeem point'
-            );
-        }
-
-        // Double-check: customer harus punya cukup point aktif
-        if ($redeemPoint->total_point_active < $claim->required_point) {
-            return $this->sendError(
-                'Point aktif tidak cukup',
-                "Point aktif customer {$redeemPoint->total_point_active}, tidak bisa approve claim {$claim->required_point}"
-            );
-        }
-
+        // Lock redeem point row + double-check point balance inside the transaction
+        // to prevent two concurrent approve calls from both deducting the same points.
         DB::beginTransaction();
         try {
+            $redeemPoint = RedeemPoint::where('customer_id', $claim->customer_id)
+                ->orderBy('id', 'desc')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$redeemPoint) {
+                DB::rollBack();
+                return $this->sendError(
+                    'Point customer tidak ditemukan',
+                    'Customer belum memiliki redeem point'
+                );
+            }
+
+            if ($redeemPoint->total_point_active < $claim->required_point) {
+                DB::rollBack();
+                return $this->sendError(
+                    'Point aktif tidak cukup',
+                    "Point aktif customer {$redeemPoint->total_point_active}, tidak bisa approve claim {$claim->required_point}"
+                );
+            }
+
             // Potong point: active -= required, closed += required
             $redeemPoint->total_point_active  = $redeemPoint->total_point_active - $claim->required_point;
             $redeemPoint->total_point_closed  = $redeemPoint->total_point_closed + $claim->required_point;
@@ -170,6 +174,18 @@ class GiftClaimController extends BaseController
             $claim->save();
 
             DB::commit();
+
+            // Audit: claim di-approve
+            app(AuditService::class)->log(
+                action:      'gift.claim_approved',
+                userId:      $admin ? (string) $admin->id : null,
+                userType:    'admin',
+                userName:    $admin?->name,
+                entityType:  'gift_claim',
+                entityId:    (string) $claim->id,
+                description: "Admin {$admin?->name} approve claim \"{$claim->gift->name}\" - dipotong {$claim->required_point} poin",
+                request:     $request
+            );
 
             return $this->sendResponse(
                 new GiftClaimResource($claim->load(['customer', 'gift', 'approver'])),

@@ -7,12 +7,16 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Point;
 use App\Models\RedeemPoint;
+use App\Services\AuditService;
 use App\Models\MasterCity;
 use App\Models\MasterDistrict;
 use App\Models\MasterProvince;
 use App\Models\MasterSubdistrict;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class OrderService
 {
@@ -92,7 +96,7 @@ class OrderService
 
         // Auto generate order_number jika tidak diisi
         if (empty($data['order_number'])) {
-            $data['order_number'] = 'ORD-' . date('Ymd') . '-' . str_pad((int) Order::whereDate('created_at', today())->count() + 1, 3, '0', STR_PAD_LEFT);
+            $data['order_number'] = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
         }
 
         // Auto fill address name jika tidak diisi
@@ -121,32 +125,49 @@ class OrderService
 
         $data['status'] = $data['status'] ?? 'processing';
 
-        $order = Order::create($data);
+        DB::beginTransaction();
+        try {
+            $order = Order::create($data);
 
-        // Create order items if provided
-        if (!empty($request['items']) && is_array($request['items'])) {
-            foreach ($request['items'] as $item) {
-                $itemData = [
-                    'order_id'      => $order->id,
-                    'name'          => $item['name'] ?? '',
-                    'quantity'      => (int) ($item['quantity'] ?? 1),
-                    'price'         => (int) ($item['price'] ?? 0),
-                    'category_id'   => !empty($item['category_id']) ? (int) $item['category_id'] : null,
-                    'brand_id'      => !empty($item['brand_id']) ? (int) $item['brand_id'] : null,
-                ];
-                // Keep backwards compat: set product_name = name for list view compatibility
-                $itemData['product_name'] = $item['name'];
-                if (!empty($item['image'])) {
-                    $itemData['image'] = $item['image'];
+            // Create order items if provided
+            if (!empty($request['items']) && is_array($request['items'])) {
+                foreach ($request['items'] as $item) {
+                    $itemData = [
+                        'order_id'      => $order->id,
+                        'name'          => $item['name'] ?? '',
+                        'quantity'      => (int) ($item['quantity'] ?? 1),
+                        'price'         => (int) ($item['price'] ?? 0),
+                        'category_id'   => !empty($item['category_id']) ? (int) $item['category_id'] : null,
+                        'brand_id'      => !empty($item['brand_id']) ? (int) $item['brand_id'] : null,
+                    ];
+                    $itemData['product_name'] = $item['name'];
+                    if (!empty($item['image'])) {
+                        $itemData['image'] = $item['image'];
+                    }
+                    if (!empty($item['variant_name'])) {
+                        $itemData['variant_name'] = $item['variant_name'];
+                    }
+                    OrderItem::create($itemData);
                 }
-                if (!empty($item['variant_name'])) {
-                    $itemData['variant_name'] = $item['variant_name'];
-                }
-                OrderItem::create($itemData);
             }
-        }
 
-        return ['order' => $order];
+            DB::commit();
+
+            // Audit: order baru dibuat oleh admin
+            $customer = Customer::find($data['customer_id']);
+            app(AuditService::class)->log(
+                action:      'order.created',
+                entityType:  'order',
+                entityId:    (string) $order->id,
+                description: "Order {$order->order_number} dibuat untuk customer \"{$customer->full_name}\" ({$order->grand_total})",
+            );
+
+            return ['order' => $order];
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Failed to create order', ['customer_id' => $data['customer_id'], 'exception' => $e]);
+            return ['error' => 'Server Error', 'errors' => 'Terjadi kesalahan pada server'];
+        }
     }
 
     /**
